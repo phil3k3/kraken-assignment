@@ -1,0 +1,66 @@
+use std::collections::HashMap;
+use std::fmt::{Display, Formatter};
+use bigdecimal::BigDecimal;
+use crate::error::Error;
+
+#[derive(Default)]
+pub struct Account {
+    pub client: u16,
+    pub funds_available: BigDecimal,
+    pub funds_held: BigDecimal,
+    disputes: HashMap<u64, BigDecimal>,
+    disputable_transactions: HashMap<u64, BigDecimal>,
+    pub locked: bool,
+}
+
+impl Account {
+    
+    pub(crate) fn new(client: u16) -> Self {
+       Account {
+           client, 
+           ..Default::default()
+       }
+    }
+    
+    pub(crate) fn withdraw(&mut self, transaction_id: u64, amount: &BigDecimal) -> crate::prelude::Result<()> {
+        self.funds_available -= amount;
+        self.disputable_transactions.insert(transaction_id, amount.clone());
+        Ok(())
+    }
+
+    pub(crate) fn deposit(&mut self, transaction_id: u64, amount: &BigDecimal) -> crate::prelude::Result<()> {
+        self.funds_available += amount;
+        self.disputable_transactions.insert(transaction_id, amount.clone());
+        Ok(())
+    }
+
+    pub(crate) fn resolve(&mut self, transaction_id: u64) -> crate::prelude::Result<()> {
+        let disputed_amount = self.disputes.remove(&transaction_id).ok_or(Error::NoDispute)?;
+        self.funds_available += &disputed_amount;
+        self.funds_held -= &disputed_amount;
+        self.disputable_transactions.insert(transaction_id, disputed_amount);
+        Ok(())
+    }
+
+    pub(crate) fn chargeback(&mut self, transaction_id: u64) -> crate::prelude::Result<()> {
+        let disputed_amount = self.disputes.remove(&transaction_id).ok_or(Error::NoDispute)?;
+        self.funds_held -= &disputed_amount;
+        self.locked = true;
+        // assume no more disputes possible on that account
+        Ok(())
+    }
+
+    pub(crate) fn dispute(&mut self, transaction_id: u64) -> crate::prelude::Result<()> {
+        let disputed_amount = self.disputable_transactions.remove(&transaction_id).ok_or(Error::NoTransaction)?;
+        self.funds_available -= &disputed_amount;
+        self.funds_held += &disputed_amount;
+        self.disputes.insert(transaction_id, disputed_amount);
+        Ok(())
+    }
+}
+
+impl Display for Account {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        !todo!()
+    }
+}
