@@ -14,4 +14,6 @@ pub enum Error {
     NoTransaction,
     #[error("Dispute not found")]
     NoDispute,
+    #[error("Unknown transaction type")]
+    UnknownTransactionType
 }
