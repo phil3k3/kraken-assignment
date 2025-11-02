@@ -20,23 +20,6 @@ enum TransactionType {
     Chargeback,
 }
 
-#[derive(Debug)]
-enum ParseError {
-    MissingField(&'static str),
-    BadKind,
-    BadNumber(&'static str),
-    Csv(csv::Error),
-}
-
-
-#[derive(Debug, serde::Deserialize)]
-struct Transaction {
-    transaction_type: TransactionType,
-    client: u16,
-    transaction_id: u64,
-    amount: Option<u32>,
-}
-
 #[derive(Debug, serde::Serialize)]
 pub struct AccountRecord {
     client: u16,
@@ -58,10 +41,51 @@ impl From<&Account> for AccountRecord {
     }
 }
 
-fn format_mu_1e4(value: i64) -> String {
-    let int_part = value / 10_000;
-    let frac_part = value % 10_000;
-    format!("{}.{:04}", int_part, frac_part)
+
+#[inline]
+fn parse_mu_u32_1e4(b: &[u8]) -> Option<u32> {
+    // Accepts "12", "12.3", "12.34", "12.3456". Rejects >4 dp or negatives.
+    let b = trim_ascii(b);
+    if b.is_empty() { return None; }
+    if b[0] == b'-' { return None; } // no negative amounts here
+
+    let mut i = 0usize;
+    let n = b.len();
+
+    let mut int_part: u64 = 0;
+    while i < n && b[i].is_ascii_digit() {
+        int_part = int_part.checked_mul(10)?.checked_add((b[i] - b'0') as u64)?;
+        i += 1;
+    }
+
+    let mut frac: u32 = 0;
+    let mut dp = 0u8;
+    if i < n && b[i] == b'.' {
+        i += 1;
+        while i < n && b[i].is_ascii_digit() && dp < 5 { // read an extra to detect >4
+            if dp < 4 { frac = frac * 10 + (b[i] - b'0') as u32; }
+            dp += 1;
+            i += 1;
+        }
+    }
+    if i != n || dp > 4 { return None; }
+
+    // Scale frac to 4 decimal places (e.g., "1.5" -> frac=5, dp=1 -> frac=5000)
+    if dp > 0 && dp < 4 {
+        frac *= 10u32.pow(4 - dp as u32);
+    }
+
+    // int_part * 10000 + frac must fit in u32
+    let total = int_part.checked_mul(10_000)?.checked_add(frac as u64)?;
+    u32::try_from(total).ok()
+}
+#[inline]
+fn trim_ascii(bytes: &[u8]) -> &[u8] {
+    let mut start = 0;
+    let mut end = bytes.len();
+    while start < end && bytes[start].is_ascii_whitespace() { start += 1; }
+    while end > start && bytes[end - 1].is_ascii_whitespace() { end -= 1; }
+    &bytes[start..end]
 }
 
 
@@ -142,52 +166,11 @@ fn parse_transaction_type(raw: &[u8]) -> Result<TransactionType> {
     }
 }
 
-// TODO fix bug
+fn format_mu_1e4(value: i64) -> String {
+    let int_part = value / 10_000;
+    let frac_part = value % 10_000;
+    format!("{}.{:04}", int_part, frac_part)
+}
+
 // TODO tests for conversion
 // TODO tests for dispute behavior and states
-
-#[inline]
-fn parse_mu_u32_1e4(b: &[u8]) -> Option<u32> {
-    // Accepts "12", "12.3", "12.34", "12.3456". Rejects >4 dp or negatives.
-    let b = trim_ascii(b);
-    if b.is_empty() { return None; }
-    if b[0] == b'-' { return None; } // no negative amounts here
-
-    let mut i = 0usize;
-    let n = b.len();
-
-    let mut int_part: u64 = 0;
-    while i < n && b[i].is_ascii_digit() {
-        int_part = int_part.checked_mul(10)?.checked_add((b[i] - b'0') as u64)?;
-        i += 1;
-    }
-
-    let mut frac: u32 = 0;
-    let mut dp = 0u8;
-    if i < n && b[i] == b'.' {
-        i += 1;
-        while i < n && b[i].is_ascii_digit() && dp < 5 { // read an extra to detect >4
-            if dp < 4 { frac = frac * 10 + (b[i] - b'0') as u32; }
-            dp += 1;
-            i += 1;
-        }
-    }
-    if i != n || dp > 4 { return None; }
-
-    // Scale frac to 4 decimal places (e.g., "1.5" -> frac=5, dp=1 -> frac=5000)
-    if dp > 0 && dp < 4 {
-        frac *= 10u32.pow(4 - dp as u32);
-    }
-
-    // int_part * 10000 + frac must fit in u32
-    let total = int_part.checked_mul(10_000)?.checked_add(frac as u64)?;
-    u32::try_from(total).ok()
-}
-#[inline]
-fn trim_ascii(bytes: &[u8]) -> &[u8] {
-    let mut start = 0;
-    let mut end = bytes.len();
-    while start < end && bytes[start].is_ascii_whitespace() { start += 1; }
-    while end > start && bytes[end - 1].is_ascii_whitespace() { end -= 1; }
-    &bytes[start..end]
-}
