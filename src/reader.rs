@@ -57,7 +57,7 @@ pub fn write_accounts(accounts: HashMap<u16, Account>) -> Result<String> {
     let mut wtr = WriterBuilder::new().from_writer(vec![]);
     accounts
         .iter()
-        .for_each(|(client, account)| wtr.serialize(AccountRecord::from(account)).unwrap());
+        .for_each(|(_client, account)| wtr.serialize(AccountRecord::from(account)).unwrap());
     let vec = wtr.into_inner().map_err(|x| Error::from(x.into_error()))?;
     String::from_utf8(vec).map_err(|x| x.utf8_error().into())
 }
