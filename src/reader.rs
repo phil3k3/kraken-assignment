@@ -1,4 +1,4 @@
-use crate::account::Account;
+use crate::account::{Account, AccountError};
 use crate::error::Error;
 use crate::prelude::*;
 use csv::{ByteRecord, ReaderBuilder, WriterBuilder};
@@ -54,31 +54,34 @@ pub fn write_accounts(accounts: HashMap<u16, Account>) -> Result<String> {
     String::from_utf8(vec).map_err(|err| err.utf8_error().into())
 }
 
-pub fn process_csv(file: &str) -> Result<HashMap<u16, Account>> {
+pub fn process_csv(file: &str, buffer_capacity: usize) -> Result<HashMap<u16, Account>> {
     let file = File::open(file)?;
-    //
-    let buffered_reader = BufReader::with_capacity(32 * 1024 * 1024, file);
+    let buffered_reader = BufReader::with_capacity(buffer_capacity, file);
     let mut reader = ReaderBuilder::new()
         .has_headers(true)                // your sample has a header row
         .flexible(true)
         .trim(csv::Trim::All)// faster when row length is fixed
-        .buffer_capacity(32 * 1024 * 1024) // if your csv crate version supports it
+        .buffer_capacity(buffer_capacity) // if your csv crate version supports it
         .from_reader(buffered_reader);
 
     let mut accounts: HashMap<u16, Account> = HashMap::new();
 
     let mut record = ByteRecord::new();
     while reader.read_byte_record(&mut record)? {
+        let line_number = reader.position().line();
+
         let transaction_type = record.get(0)
-            .ok_or(Error::MissingTransactionType)
-            .and_then(parse_transaction_type)?;
-        let client = record.get(1).ok_or(Error::MissingClient)
+            .ok_or(Error::MissingTransactionType(line_number))
+            .and_then(|raw| parse_transaction_type(raw, line_number))?;
+        let client = record.get(1)
+            .ok_or(Error::MissingClient(line_number))
             .and_then(|client| lexical_core::parse::<u16>(client).map_err(Error::from))?;
-        let transaction_id = record.get(2).ok_or(Error::MissingTransactionId)
+        let transaction_id = record.get(2)
+            .ok_or(Error::MissingTransactionId(line_number))
             .and_then(|transaction_id| lexical_core::parse::<u64>(transaction_id).map_err(Error::from))?;
 
         let amount_row: Option<Amount> = record.get(3)
-            .map(parse_mu_u32_1e4)
+            .map(|raw| parse_mu_u32_1e4(raw, line_number))
             .transpose()?
             .flatten();
 
@@ -88,21 +91,30 @@ pub fn process_csv(file: &str) -> Result<HashMap<u16, Account>> {
 
         match transaction_type {
             TransactionType::Deposit => {
-                let amount = amount_row.ok_or(Error::MissingAmount)?;
-                account.deposit(transaction_id, amount)?;
+                let amount = amount_row.ok_or(Error::MissingAmount(line_number))?;
+                account.deposit(transaction_id, amount);
             }
             TransactionType::Withdrawal => {
-                let amount = amount_row.ok_or(Error::MissingAmount)?;
-                account.withdraw(transaction_id, amount)?;
+                let amount = amount_row.ok_or(Error::MissingAmount(line_number))?;
+                account.withdraw(transaction_id, amount);
             }
             TransactionType::Dispute => {
-                account.dispute(transaction_id)?;
+                account.dispute(transaction_id).map_err(|err| match err {
+                    AccountError::NoTransaction(tx_id) => Error::NoTransaction(tx_id, line_number),
+                    AccountError::NoDispute(tx_id) => Error::NoDispute(tx_id, line_number),
+                })?;
             }
             TransactionType::Resolve => {
-                account.resolve(transaction_id)?;
+                account.resolve(transaction_id).map_err(|err| match err {
+                    AccountError::NoTransaction(tx_id) => Error::NoTransaction(tx_id, line_number),
+                    AccountError::NoDispute(tx_id) => Error::NoDispute(tx_id, line_number),
+                })?;
             }
             TransactionType::Chargeback => {
-                account.chargeback(transaction_id)?;
+                account.chargeback(transaction_id).map_err(|err| match err {
+                    AccountError::NoTransaction(tx_id) => Error::NoTransaction(tx_id, line_number),
+                    AccountError::NoDispute(tx_id) => Error::NoDispute(tx_id, line_number),
+                })?;
             }
         }
     }
@@ -111,7 +123,7 @@ pub fn process_csv(file: &str) -> Result<HashMap<u16, Account>> {
 }
 
 #[inline]
-fn parse_transaction_type(raw: &[u8]) -> Result<TransactionType> {
+fn parse_transaction_type(raw: &[u8], line_number: u64) -> Result<TransactionType> {
     // Avoid allocations: compare against byte literals after trimming.
     let b = trim_ascii(raw);
     match b {
@@ -120,7 +132,7 @@ fn parse_transaction_type(raw: &[u8]) -> Result<TransactionType> {
         b"dispute"     => Ok(TransactionType::Dispute),
         b"resolve"     => Ok(TransactionType::Resolve),
         b"chargeback"   => Ok(TransactionType::Chargeback),
-        _              => Err(Error::UnknownTransactionType),
+        _              => Err(Error::UnknownTransactionType(line_number)),
     }
 }
 
@@ -136,10 +148,10 @@ fn trim_ascii(bytes: &[u8]) -> &[u8] {
 
 
 #[inline]
-fn parse_mu_u32_1e4(b: &[u8]) -> Result<Option<Amount>> {
+fn parse_mu_u32_1e4(b: &[u8], line_number: u64) -> Result<Option<Amount>> {
     let b = trim_ascii(b);
     if b.is_empty() { return Ok(None); }
-    if b[0] == b'-' { return Err(Error::NegativeAmount); }
+    if b[0] == b'-' { return Err(Error::NegativeAmount(line_number)); }
     let s = from_utf8(b)?.trim();
     let v: ConstScaleFpdec<i64, 4> = s.parse()?;
     Ok(Some(v))

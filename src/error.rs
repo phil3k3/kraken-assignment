@@ -16,20 +16,20 @@ pub enum Error {
     LexicalParse(#[from] lexical_core::Error),
 
     // User errors
-    #[error("Missing transaction type")]
-    MissingTransactionType,
-    #[error("Missing client")]
-    MissingClient,
-    #[error("Missing transaction id")]
-    MissingTransactionId,
-    #[error("Amount missing")]
-    MissingAmount,
-    #[error("Negative amount")]
-    NegativeAmount,
-    #[error("Unknown transaction type")]
-    UnknownTransactionType,
-    #[error("Transaction not found")]
-    NoTransaction,
-    #[error("Dispute not found")]
-    NoDispute,
+    #[error("Missing transaction type on line {0}")]
+    MissingTransactionType(u64),
+    #[error("Missing client on line {0}")]
+    MissingClient(u64),
+    #[error("Missing transaction id on line {0}")]
+    MissingTransactionId(u64),
+    #[error("Amount missing on line {0}")]
+    MissingAmount(u64),
+    #[error("Negative amount on line {0}")]
+    NegativeAmount(u64),
+    #[error("Unknown transaction type on line {0}")]
+    UnknownTransactionType(u64),
+    #[error("Transaction id {0} not found for dispute on line {1}")]
+    NoTransaction(u64, u64),
+    #[error("Dispute not found for resolve/chargeback of transaction id {0} on line {1}")]
+    NoDispute(u64, u64),
 }

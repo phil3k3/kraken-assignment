@@ -4,8 +4,10 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+config = "0.14"
 csv = "1.4.0"
 lexical-core = "1.0.6"
 primitive_fixed_point_decimal = "0.11.0"
 serde = { version = "1.0.228", features = ["derive"] }
 thiserror = "2.0.17"
+toml = "0.8"
