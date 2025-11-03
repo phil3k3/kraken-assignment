@@ -45,26 +45,6 @@ impl From<Account> for AccountRecord {
 }
 
 
-#[inline]
-fn parse_mu_u32_1e4(b: &[u8]) -> Result<Option<Amount>> {
-    let b = trim_ascii(b);
-    if b.is_empty() { return Ok(None); }
-    if b[0] == b'-' { return Err(Error::NegativeAmount); }
-    let s = from_utf8(b)?.trim();
-    let v: ConstScaleFpdec<i64, 4> = s.parse()?;
-    Ok(Some(v))
-}
-
-#[inline]
-fn trim_ascii(bytes: &[u8]) -> &[u8] {
-    let mut start = 0;
-    let mut end = bytes.len();
-    while start < end && bytes[start].is_ascii_whitespace() { start += 1; }
-    while end > start && bytes[end - 1].is_ascii_whitespace() { end -= 1; }
-    &bytes[start..end]
-}
-
-
 pub fn write_accounts(accounts: HashMap<u16, Account>) -> Result<String> {
     let mut writer = WriterBuilder::new().from_writer(vec![]);
     for (_client_id, account) in accounts {
@@ -143,6 +123,28 @@ fn parse_transaction_type(raw: &[u8]) -> Result<TransactionType> {
         _              => Err(Error::UnknownTransactionType),
     }
 }
+
+#[inline]
+fn trim_ascii(bytes: &[u8]) -> &[u8] {
+    let mut start = 0;
+    let mut end = bytes.len();
+    while start < end && bytes[start].is_ascii_whitespace() { start += 1; }
+    while end > start && bytes[end - 1].is_ascii_whitespace() { end -= 1; }
+    &bytes[start..end]
+}
+
+
+
+#[inline]
+fn parse_mu_u32_1e4(b: &[u8]) -> Result<Option<Amount>> {
+    let b = trim_ascii(b);
+    if b.is_empty() { return Ok(None); }
+    if b[0] == b'-' { return Err(Error::NegativeAmount); }
+    let s = from_utf8(b)?.trim();
+    let v: ConstScaleFpdec<i64, 4> = s.parse()?;
+    Ok(Some(v))
+}
+
 
 // TODO tests for conversion
 // TODO tests for dispute behavior and states
