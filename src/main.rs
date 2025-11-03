@@ -6,6 +6,9 @@ mod reader;
 
 use crate::reader::{process_csv, write_accounts};
 use std::env;
+use primitive_fixed_point_decimal::ConstScaleFpdec;
+
+type Amount = ConstScaleFpdec<i64, 4>;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
