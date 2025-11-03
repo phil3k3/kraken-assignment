@@ -67,3 +67,7 @@ The application can be configured using a `Settings.toml` file in the project ro
 - `tests/` - Integration tests
 - `Cargo.toml` - Project dependencies and metadata
 - `Settings.toml` - Application configuration
+
+---
+
+*This README and tests were generated with AI support.*
