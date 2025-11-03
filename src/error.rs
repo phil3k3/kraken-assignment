@@ -4,11 +4,11 @@ use primitive_fixed_point_decimal::ParseError;
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error(transparent)]
-    Error(#[from] std::io::Error),
+    Io(#[from] std::io::Error),
     #[error(transparent)]
-    Error2(#[from] csv::Error),
+    Csv(#[from] csv::Error),
     #[error(transparent)]
-    Error3(#[from] Utf8Error),
+    Utf8(#[from] Utf8Error),
     #[error("Amount missing")]
     MissingAmount,
     #[error("Transaction not found")]
@@ -20,11 +20,11 @@ pub enum Error {
     #[error("Negative amount")]
     NegativeAmount,
     #[error(transparent)]
-    Error4(#[from] ParseError),
+    Parse(#[from] ParseError),
     #[error("Missing client")]
     MissingClient,
     #[error(transparent)]
-    Error5(#[from] lexical_core::Error),
+    LexicalParse(#[from] lexical_core::Error),
     #[error("Missing transaction type")]
     MissingTransactionType,
     #[error("Missing transaction id")]

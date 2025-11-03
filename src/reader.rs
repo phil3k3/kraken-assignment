@@ -33,13 +33,13 @@ pub struct AccountRecord {
 }
 
 impl From<Account> for AccountRecord {
-    fn from(value: Account) -> Self {
+    fn from(account: Account) -> Self {
         AccountRecord {
-            client: value.client,
-            available: value.funds_available.to_string(),
-            held: value.funds_available.to_string(),
-            total: (value.funds_held + value.funds_available).to_string(),
-            locked: value.locked
+            client: account.client,
+            available: account.funds_available.to_string(),
+            held: account.funds_held.to_string(),
+            total: (account.funds_held + account.funds_available).to_string(),
+            locked: account.locked
         }
     }
 }
@@ -67,11 +67,11 @@ fn trim_ascii(bytes: &[u8]) -> &[u8] {
 
 pub fn write_accounts(accounts: HashMap<u16, Account>) -> Result<String> {
     let mut writer = WriterBuilder::new().from_writer(vec![]);
-    for account in accounts {
-        writer.serialize(AccountRecord::from(account.1))?;
+    for (_client_id, account) in accounts {
+        writer.serialize(AccountRecord::from(account))?;
     }
-    let vec = writer.into_inner().map_err(|x| Error::from(x.into_error()))?;
-    String::from_utf8(vec).map_err(|x| x.utf8_error().into())
+    let vec = writer.into_inner().map_err(|err| Error::from(err.into_error()))?;
+    String::from_utf8(vec).map_err(|err| err.utf8_error().into())
 }
 
 pub fn process_csv(file: &str) -> Result<HashMap<u16, Account>> {
@@ -91,20 +91,20 @@ pub fn process_csv(file: &str) -> Result<HashMap<u16, Account>> {
     while reader.read_byte_record(&mut record)? {
         let transaction_type = record.get(0)
             .ok_or(Error::MissingTransactionType)
-            .and_then(|transaction_type| parse_transaction_type(transaction_type))?;
+            .and_then(parse_transaction_type)?;
         let client = record.get(1).ok_or(Error::MissingClient)
-            .and_then(|client| lexical_core::parse::<u16>(client).map_err(|x| Error::from(x)))?;
+            .and_then(|client| lexical_core::parse::<u16>(client).map_err(Error::from))?;
         let transaction_id = record.get(2).ok_or(Error::MissingTransactionId)
-            .and_then(|transaction_id| lexical_core::parse::<u64>(transaction_id).map_err(|x| Error::from(x)))?;
+            .and_then(|transaction_id| lexical_core::parse::<u64>(transaction_id).map_err(Error::from))?;
 
-        let amount_row : Option<Amount> = record.get(3)
-            .map(|x| parse_mu_u32_1e4(x))
+        let amount_row: Option<Amount> = record.get(3)
+            .map(parse_mu_u32_1e4)
             .transpose()?
             .flatten();
 
         let account = accounts
             .entry(client)
-            .or_insert_with(|| Account::new(client));
+            .or_insert_with_key(|&client| Account::new(client));
 
         match transaction_type {
             TransactionType::Deposit => {
