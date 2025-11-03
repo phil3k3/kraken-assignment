@@ -5,7 +5,7 @@ mod prelude;
 mod reader;
 mod settings;
 
-use crate::reader::{process_csv, write_accounts};
+use crate::reader::{parse_csv, write_accounts};
 use crate::settings::Settings;
 use std::env;
 use primitive_fixed_point_decimal::ConstScaleFpdec;
@@ -25,7 +25,7 @@ fn main() {
         Settings::default()
     });
 
-    process_csv(args.get(1).expect("csv file argument"), settings.buffer_capacity())
+    parse_csv(args.get(1).expect("csv file argument"), settings.buffer_capacity())
         .and_then(|accounts| {
             write_accounts(accounts).map(|output| {
                 print!("{}", output);

@@ -1,0 +1,6 @@
+# Kraken CSV Processing Settings
+
+[buffer]
+# Buffer capacity in bytes for reading CSV files
+# Default: 32 MB (32 * 1024 * 1024 = 33554432)
+capacity = 33554432
